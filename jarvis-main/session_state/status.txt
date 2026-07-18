@@ -1,0 +1,33 @@
+Jarvis project status snapshot
+=============================
+
+Date: 2026-07-18
+Project: jarvis-main
+
+What is working:
+- Local Ollama integration is available for AI responses.
+- Jarvis now listens continuously without requiring a wake word.
+- Voice input uses a local Whisper-based speech-to-text path first, with a fallback to Google recognizer.
+- The assistant can respond to spoken commands and keep a short conversation context for Ollama replies.
+- The assistant can now handle stop confirmation, YouTube/YouTube Music search, Spotify search opening, and reminder logging.
+
+Files involved:
+- jarvis.py
+- requirements.txt
+- setup_ollama.py
+- .env
+
+Current behavior:
+- The app listens for voice input and responds with spoken output using Edge TTS.
+- It can handle simple commands such as hello, time, date, open Spotify, open VS Code, and general Ollama-based chat.
+- It can open YouTube or Spotify searches for specific song or topic requests.
+- The current interaction flow is continuous listening rather than wake-word driven.
+
+Recent changes saved:
+- Improved YouTube query parsing so spoken requests are passed more directly into search URLs.
+- Verified syntax successfully with: python -m py_compile jarvis.py setup_ollama.py
+
+Notes:
+- Microphone quality still affects recognition accuracy.
+- Ollama is used for the AI brain; speech recognition is separate from the LLM layer.
+- Exact media playback is still browser/search-based rather than direct in-app playback.
