@@ -250,6 +250,8 @@ class VoiceWorker(QThread):
 
     def is_stop_command(self, text: str) -> bool:
         clean = text.lower().strip().rstrip(".?!")
+        if any(x in clean for x in ("youtube", "yt", "music", "spotify")):
+            return False
         stop_phrases = ["stop", "cancel", "shut up", "quiet", "stop jarvis", "hold on", "never mind"]
         return any(phrase == clean or clean.startswith(phrase) for phrase in stop_phrases)
 
@@ -325,6 +327,11 @@ class VoiceWorker(QThread):
         # 1. Stop / Cancel
         if clean in ("stop", "cancel", "shut up", "quiet", "stop jarvis", "hold on", "never mind"):
             return ("Stopped.", True)
+            
+        # 1a. Stop YouTube / Stop YT
+        if clean in ("stop youtube", "stop yt", "close youtube", "close yt", "stop youtube music", "stop yt music"):
+            res = tool_registry.execute('[TOOL: stop_youtube()]')
+            return (res, True)
             
         # 1b. Conversational/Greeting commands
         if clean in ("hello", "hi", "hey", "greetings", "hi jarvis", "hello jarvis", "hey jarvis"):

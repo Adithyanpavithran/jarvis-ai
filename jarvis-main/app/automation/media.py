@@ -199,6 +199,46 @@ def open_youtube_music(query: str = None) -> str:
         log.warning("Could not open YouTube Music: %s", e)
         return f"Failed to open YouTube Music: {e}"
 
+@tool_registry.register("stop_youtube")
+def stop_youtube() -> str:
+    """Close any open YouTube browser windows or tabs."""
+    import ctypes
+    log.info("Attempting to close YouTube windows...")
+    
+    EnumWindows = ctypes.windll.user32.EnumWindows
+    EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    GetWindowText = ctypes.windll.user32.GetWindowTextW
+    GetWindowTextLength = ctypes.windll.user32.GetWindowTextLengthW
+    IsWindowVisible = ctypes.windll.user32.IsWindowVisible
+    PostMessage = ctypes.windll.user32.PostMessageW
+    
+    WM_CLOSE = 0x0010
+    closed_count = 0
+
+    def foreach_window(hwnd, lParam):
+        nonlocal closed_count
+        if IsWindowVisible(hwnd):
+            length = GetWindowTextLength(hwnd)
+            if length > 0:
+                buff = ctypes.create_unicode_buffer(length + 1)
+                GetWindowText(hwnd, buff, length + 1)
+                title = buff.value
+                if "youtube" in title.lower():
+                    log.info("Found YouTube window: '%s'. Closing it...", title)
+                    PostMessage(hwnd, WM_CLOSE, 0, 0)
+                    closed_count += 1
+        return True
+
+    try:
+        EnumWindows(EnumWindowsProc(foreach_window), 0)
+        if closed_count > 0:
+            return f"Closed {closed_count} YouTube window(s)."
+        else:
+            return "No open YouTube windows were found."
+    except Exception as e:
+        log.error("Failed to close YouTube windows: %s", e)
+        return f"Error closing YouTube windows: {e}"
+
 import os
 import webbrowser
 
