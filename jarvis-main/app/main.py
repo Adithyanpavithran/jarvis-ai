@@ -166,12 +166,7 @@ class VoiceWorker(QThread):
                         
                         now_s = frames_recorded / SAMPLE_RATE
                         
-                        # Calibrate noise floor in first 0.25 seconds
-                        if not speech_detected and len(frames) < 10:
-                            baseline_rms = max(baseline_rms, rms)
-                            frames.append(data.copy())
-                            continue
-
+                        # Continuous adaptive noise floor tracking when not speaking
                         speech_threshold = max(baseline_rms * 2.2, 150.0)
 
                         if not speech_detected:
@@ -184,8 +179,11 @@ class VoiceWorker(QThread):
                                 speech_detected = True
                                 if self.state == "idle":
                                     self.set_state("listening")
-                                log.info("Continuous Voice: Speech activity detected.")
+                                log.info("Continuous Voice: Speech activity detected. Threshold: %.1f, RMS: %.1f", speech_threshold, rms)
                                 frames_recorded = len(frames) * 1024
+                            else:
+                                # Slowly adapt baseline RMS to ambient noise level when not speaking
+                                baseline_rms = 0.96 * baseline_rms + 0.04 * rms
                         else:
                             frames.append(data.copy())
                             frames_recorded += 1024
@@ -210,7 +208,6 @@ class VoiceWorker(QThread):
                                     speech_detected = False
                                     silence_start_time = None
                                     frames_recorded = 0
-                                    baseline_rms = 100.0
                                     
                                     # Reset voice override flag to return to double-clap mode
                                     self.trigger_voice_record_once = False
@@ -236,7 +233,6 @@ class VoiceWorker(QThread):
                                 speech_detected = False
                                 silence_start_time = None
                                 frames_recorded = 0
-                                baseline_rms = 100.0
                                 
                                 # Reset voice override flag to return to double-clap mode
                                 self.trigger_voice_record_once = False
