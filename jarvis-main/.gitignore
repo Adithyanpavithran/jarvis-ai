@@ -1,2 +1,6 @@
 .env
 .cache/
+build/
+dist/
+__pycache__/
+*.spec

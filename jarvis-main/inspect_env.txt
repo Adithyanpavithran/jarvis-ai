@@ -1,0 +1,6 @@
+executable=C:\Python313\python.exe
+prefix=C:\Python313
+version=3.13.5 (tags/v3.13.5:6cb20a2, Jun 11 2025, 16:15:46) [MSC v.1943 64 bit (AMD64)]
+sitepackages=['C:\\Python313', 'C:\\Python313\\Lib\\site-packages']
+edge_tts=C:\Users\LENOVO\AppData\Roaming\Python\Python313\site-packages\edge_tts\__init__.py
+dotenv=C:\Users\LENOVO\AppData\Roaming\Python\Python313\site-packages\dotenv\__init__.py

@@ -1,6 +1,10 @@
 numpy>=1.24,<3
-sounddevice>=0.4.6,<0.6
-edge-tts>=7.2.8,<8
-SpeechRecognition>=3.8.1,<4
-openai-whisper>=20231117,<20250000
-python-dotenv>=1.0,<2
+sounddevice>=0.5.0
+edge-tts>=7.2.8
+SpeechRecognition>=3.8.1
+openai-whisper>=20231117
+python-dotenv>=1.0
+PySide6>=6.0.0
+pygame>=2.0.0
+pillow>=9.0.0
+plyer>=2.1.0

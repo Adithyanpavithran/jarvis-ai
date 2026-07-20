@@ -1,100 +1,72 @@
-# Desktop clap → Jarvis-style welcome
+# Jarvis Desktop AI Assistant
 
-Python script that listens to your default microphone and runs a **double-clap** welcome flow (Spotify, Chrome windows, Edge TTS, Cursor). See constants at the top of `jarvis.py` for behavior and tuning.
+Jarvis is a modular, production-grade local desktop AI assistant for Windows built with **Python**, **Ollama**, and **PySide6** (Qt for Python). It runs entirely on your local machine, keeping your data secure while providing deep integration into your desktop system.
 
-## Setup
+## Project Architecture
 
-From this project directory:
+The project is structured under a clean architecture system:
 
-```bash
-python -m pip install -r requirements.txt
+```
+jarvis/
+  app/
+    config/          # Configuration schema, registry entry, settings manager
+    database/        # SQLite backend (memory storage, conversations history, note, todo)
+    voice/           # Speech-To-Text (Whisper), Text-To-Speech (Edge, SAPI), Wake Word
+    ai/              # Ollama client connection, system prompts, tool execution parser
+    automation/      # Native system control, file system operations, media player control
+    plugins/         # Custom dynamic plugin loaders
+    ui/              # PySide6 widgets: floating assistant, animated pulse, dashboard tabs
+    utils/           # Rotational loggers, dynamic directory resolvers
+    main.py          # Entry point, background VoiceWorker thread, system tray menu
+  plugins/           # Dynamic custom drop-in user plugins directory
+  requirements.txt   # Package dependencies
+  README.md          # User documentation
 ```
 
-## Environment variables
+---
 
-The script loads a **`.env` file** in the same folder as `jarvis.py` (via `python-dotenv`). You can also set variables in the shell.
+## Features
 
-### Required (Edge TTS welcome line)
+1. **Floating Glow Widget**: A circular widget that floats above all apps. Pulsates to indicate state:
+   - **Cyan (Breathe)**: Idle / Listening for Wake Word.
+   - **Pink (Pulse)**: Listening for speech.
+   - **Orange (Shimmer)**: Querying local LLM (thinking).
+   - **Purple (Wave)**: Speaking responses.
+2. **Settings Window**: Configure TTS voice/rate, wake mode, STT models, and local Ollama parameters.
+3. **Continuous Microphone Monitoring**: Speech activity auto-calibration stops recording 1.2s after silence.
+4. **SQLite Memory Manager**: Retains semantic memories and user profile facts used in LLM context.
+5. **Dynamic Tool Calling**: Recognizes commands and triggers desktop actions (volume, screenshots, app opening, lock screen).
+6. **Task Board**: Built-in To-Do list manager connected directly to database commands.
 
-| Variable | Purpose |
-| -------- | ------- |
-| `EDGE_TTS_VOICE` | Voice name for Edge TTS, e.g. `en-US-JennyNeural`. |
+---
 
-Without this, the welcome speech is skipped (other actions may still run).
+## Installation & Setup
 
-### Optional
+### Prerequisites
 
-| Variable | Purpose |
-| -------- | ------- |
-| `EDGE_TTS_RATE` | Speech rate, e.g. `0%`, `+10%`, `-10%`. Default is `0%`. |
-| `EDGE_TTS_VOLUME` | Volume adjustment, e.g. `0%`, `+10%`, `-10%`. Default is `0%`. |
-| `JARVIS_WELCOME_CACHE_DIR` | Custom folder for cached welcome WAV (default: `.cache/jarvis_welcome/` under the project). |
-| `JARVIS_INPUT_DEVICE` | Optional mic override: **integer** index or **substring** of the device name. If unset, the script uses the Windows default; when that mic is silent, it auto-picks the loudest working input. List devices: `python -c "import sounddevice as sd; print(sd.query_devices())"`. |
-| `CLAUDE_CODE_URL` | URL opened for Claude in Chrome (default: new chat). |
-| `TASARADAR_URL` | URL opened for Tasaradar in Chrome (default: `https://tasaradar.com`). `BINANCE_BTC_URL` is still read as a fallback if set. |
-| `CHROME_NEW_WINDOW_WAIT_S` | Seconds to wait for a new Chrome window on Windows (default `25`). |
-| `CHROME_WINDOW_WIDTH` / `CHROME_WINDOW_HEIGHT` | Windowed Chrome size when not fullscreen. |
+1. Install **Python 3.10 to 3.13**.
+2. Install **Ollama** from [ollama.com](https://ollama.com).
+3. Open your terminal and pull a model (e.g. Mistral):
+   ```bash
+   ollama pull mistral
+   ```
 
-Example `.env`:
+### Setup Steps
 
-```env
-EDGE_TTS_VOICE=en-US-JennyNeural
-EDGE_TTS_RATE=+0%
-EDGE_TTS_VOLUME=+0%
-```
+1. Clone or copy this repository directory.
+2. Open a PowerShell/cmd prompt in the directory and install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Run the application:
+   ```bash
+   python app/main.py
+   ```
 
-## Run
+---
 
-```bash
-python jarvis.py
-```
+## Configuration & Customization
 
-Allow the microphone if Windows prompts you. Stop with **Ctrl+C**.
-
-## Tuning
-
-Edit the constants at the top of `jarvis.py`:
-
-| Constant      | Effect                                                            |
-| ------------- | ----------------------------------------------------------------- |
-| `SPIKE_RATIO` | Increase if you get false triggers; decrease if claps are missed. |
-| `COOLDOWN_S`  | Minimum time between two logged claps.                            |
-| `BLOCK_MS`    | Larger = slightly less CPU, a bit less precise timing.            |
-| `MIN_RMS`     | Floor on how loud a block must be (helps in very quiet rooms).  |
-| `SAMPLE_RATE` | Try `48000` if your device does not like `44100`.                 |
-
-## Troubleshooting
-
-- **Wrong or quiet mic:** On startup the script probes your default Windows input. If it is silent, it **auto-selects** the loudest working mic. To force a specific device, set `JARVIS_INPUT_DEVICE` in `.env` (index or name substring from `sounddevice.query_devices()`).
-- **PortAudio / audio errors:** Update audio drivers or try another `SAMPLE_RATE`.
-- **No reaction to claps:** Lower `SPIKE_RATIO` slightly or speak/clap closer to the mic.
-- **Spam logs:** Raise `SPIKE_RATIO` or `COOLDOWN_S`.
-- **No welcome speech:** Set `EDGE_TTS_VOICE` in `.env` and restart the terminal so variables load.
-
-## Optional: Local Ollama LLM (free local models)
-
-This project can use a local Ollama server for LLM responses (no cloud billing). By default `jarvis.py` will attempt to query `OLLAMA_API_URL` when `OLLAMA_ENABLED` is true (defaults to `http://localhost:11434`).
-
-Quick steps:
-
-1. Install Ollama for your platform (see the official Ollama instructions).
-2. Pull a model you want to use (example `mistral`):
-
-```bash
-ollama pull mistral
-```
-
-3. Verify the server and available models:
-
-```bash
-python setup_ollama.py --check-server
-python setup_ollama.py --list
-```
-
-4. Run Jarvis (ensure `OLLAMA_ENABLED=True` in `.env` if you want responses):
-
-```bash
-python jarvis.py
-```
-
-If you'd like a helper to pull models or check your local Ollama server, use the included script: [setup_ollama.py](setup_ollama.py).
+- Settings are saved to `%APPDATA%/Jarvis/settings.json`.
+- Logs are kept in `%APPDATA%/Jarvis/logs/jarvis.log` with a 10MB rotation count.
+- You can create drop-in plugins by writing python modules inheriting from `JarvisPlugin` and putting them in the `%APPDATA%/Jarvis/plugins/` directory. A sample plugin template `sample_plugin.py` is generated automatically at startup.
