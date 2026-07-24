@@ -609,6 +609,32 @@ class VoiceWorker(QThread):
                 res = tool_registry.execute('[TOOL: list_todos()]')
                 return (res, True)
 
+        # 7. Git Automation commands
+        if "git" in clean or "commit" in clean or "push to github" in clean or "push to repo" in clean:
+            if clean in ("git status", "check git status", "check repo status", "repository status"):
+                res = tool_registry.execute('[TOOL: git_status()]')
+                return (res, True)
+
+            if "commit and push" in clean or "push code" in clean or "push to github" in clean or "push to repo" in clean or clean in ("git push", "push changes"):
+                # First commit if there are pending changes, then push
+                msg = "Update Jarvis repository"
+                if "with message " in clean:
+                    msg = clean.split("with message ", 1)[1].strip()
+                commit_res = tool_registry.execute(f'[TOOL: git_commit("{msg}")]')
+                push_res = tool_registry.execute('[TOOL: git_push("main")]')
+                return (f"{commit_res}\n{push_res}", True)
+
+            if "commit" in clean:
+                msg = "Update Jarvis repository"
+                if "with message " in clean or "message " in clean:
+                    msg = clean.split("message ", 1)[1].strip()
+                res = tool_registry.execute(f'[TOOL: git_commit("{msg}")]')
+                return (res, True)
+
+            if "git pull" in clean or "pull code" in clean:
+                res = tool_registry.execute('[TOOL: git_pull("main")]')
+                return (res, True)
+
         return (None, False)
 
 

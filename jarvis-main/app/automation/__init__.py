@@ -5,4 +5,5 @@ from app.automation import media
 from app.automation import internet
 from app.automation import productivity
 from app.automation import smart_home
+from app.automation import git_ops
 
