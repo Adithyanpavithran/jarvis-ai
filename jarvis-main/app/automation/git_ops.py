@@ -22,6 +22,7 @@ def git_status_tool() -> str:
 def git_commit_tool(message: str) -> str:
     """Stage changes and commit them with a commit message."""
     try:
+        message = str(message).strip(" '\"")
         root = get_repo_root()
         # Stage all changes
         subprocess.run(["git", "add", "."], cwd=root, capture_output=True, text=True, check=True)
@@ -39,6 +40,8 @@ def git_commit_tool(message: str) -> str:
 def git_push_tool(branch: str = "main") -> str:
     """Push local commits to GitHub origin remote."""
     try:
+        import re
+        branch = re.sub(r"[^\w\-\/]", "", str(branch)) or "main"
         root = get_repo_root()
         res = subprocess.run(["git", "push", "origin", branch], cwd=root, capture_output=True, text=True)
         if res.returncode == 0:
