@@ -102,7 +102,7 @@ class OllamaClient:
                 
                 # Check for tool call tags in the reply
                 tool_call = None
-                tool_match = re.search(r"(\[TOOL:\s*\w+\s*\(.*\)\s*\])", full_reply)
+                tool_match = re.search(r"(\[TOOL:\s*\w+\s*\(.*?\)\s*\])", full_reply, re.DOTALL)
                 if tool_match:
                     tool_call = tool_match.group(1)
                     # Clean the response text by removing the tool call tag

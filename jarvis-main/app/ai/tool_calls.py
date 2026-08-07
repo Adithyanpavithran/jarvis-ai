@@ -16,7 +16,7 @@ class ToolRegistry:
         Parse and execute a tool tag like: [TOOL: tool_name("arg1", 123)]
         Returns a string representation of the result or error.
         """
-        match = re.match(r"\[TOOL:\s*(\w+)\s*\((.*)\)\s*\]", tool_tag.strip())
+        match = re.search(r"\[TOOL:\s*(\w+)\s*\((.*?)\)\s*\]", tool_tag.strip(), re.DOTALL)
         if not match:
             return "Error: Invalid tool tag format."
 

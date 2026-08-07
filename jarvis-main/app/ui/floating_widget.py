@@ -121,6 +121,11 @@ class FloatingAssistant(QWidget):
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
 
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+            event.accept()
+
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()

@@ -15,6 +15,9 @@ class TextToSpeechManager:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._init_pygame()
         self.sapi_voice = None
+        import threading
+        self.speech_lock = threading.Lock()
+        self.is_speaking = False
 
     def _init_pygame(self):
         """Initialize pygame mixer for audio playback."""
@@ -51,6 +54,18 @@ class TextToSpeechManager:
         """Speak the text. Uses threads or runs asyncio internally."""
         if not text.strip():
             return
+
+        if self.is_speaking:
+            self.stop()
+
+        with self.speech_lock:
+            self.is_speaking = True
+            try:
+                self._do_speak(text)
+            finally:
+                self.is_speaking = False
+
+    def _do_speak(self, text: str):
 
         backend = settings_manager.get("tts_backend", "edge-tts")
         voice = settings_manager.get("tts_voice", "en-US-JennyNeural")
@@ -106,31 +121,38 @@ class TextToSpeechManager:
             except Exception as e:
                 log.error("Piper TTS failed: %s", e)
 
-        # 3. Fallback: SAPI (Windows Native Offline TTS)
+        # 3. Fallback: SAPI (Windows Native Offline TTS - Female Voice)
         if sys.platform == "win32":
             try:
                 import win32com.client
                 if self.sapi_voice is None:
                     self.sapi_voice = win32com.client.Dispatch("SAPI.SpVoice")
+                    # Explicitly select female voice (Microsoft Zira / Female)
+                    for v in self.sapi_voice.GetVoices():
+                        desc = v.GetDescription().lower()
+                        if "zira" in desc or "female" in desc or "eva" in desc or "hazel" in desc:
+                            self.sapi_voice.Voice = v
+                            break
                 self.sapi_voice.Speak(text)
                 return
             except Exception as e:
                 log.error("SAPI voice failed: %s", e)
 
-        # 4. Final Fallback: PowerShell SpeechSynthesizer
+        # 4. Final Fallback: PowerShell SpeechSynthesizer (Female Voice)
         if sys.platform == "win32":
             try:
                 with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix=".txt") as tmp:
                     tmp.write(text)
                     tmp_path = tmp.name
                 safe_path = tmp_path.replace("'", "''")
+                ps_cmd = (
+                    "Add-Type -AssemblyName System.Speech; "
+                    "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                    "try { $s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::Female) } catch {}; "
+                    f"$s.Speak((Get-Content -Raw -Path '{safe_path}'))"
+                )
                 subprocess.run(
-                    [
-                        "powershell",
-                        "-NoProfile",
-                        "-Command",
-                        f"Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Speak((Get-Content -Raw -Path '{safe_path}'))",
-                    ],
+                    ["powershell", "-NoProfile", "-Command", ps_cmd],
                     check=True,
                     creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
                 )

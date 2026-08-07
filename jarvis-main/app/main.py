@@ -61,7 +61,7 @@ class VoiceWorker(QThread):
         log.info("Background Voice Worker thread started.")
         self.set_state("idle")
         
-        SAMPLE_RATE = 44100
+        SAMPLE_RATE = 16000
         while self.running:
             # Check for typed commands in queue first
             try:
@@ -161,13 +161,24 @@ class VoiceWorker(QThread):
                                         first_clap_time = now
                             continue
 
-                        # Voice recording/listening logic
+                        # Voice recording/listening logic (Allow barge-in voice commands while speaking)
+                        if self.state == "thinking":
+                            frames = []
+                            speech_detected = False
+                            silence_start_time = None
+                            frames_recorded = 0
+                            time.sleep(0.05)
+                            continue
+
                         rms = np.sqrt(np.mean(data.astype(np.float32) ** 2)) if data.size > 0 else 0
                         
                         now_s = frames_recorded / SAMPLE_RATE
                         
-                        # Continuous adaptive noise floor tracking when not speaking
-                        speech_threshold = max(baseline_rms * 2.2, 150.0)
+                        # Continuous adaptive noise floor tracking
+                        if self.state == "speaking":
+                            speech_threshold = max(baseline_rms * 2.5, 120.0)
+                        else:
+                            speech_threshold = max(baseline_rms * 1.4, 40.0)
 
                         if not speech_detected:
                             # Slide window of pre-speech blocks to capture onset
@@ -194,6 +205,7 @@ class VoiceWorker(QThread):
                                     silence_start_time = now_s
                                 elif now_s - silence_start_time >= silence_limit:
                                     log.info("Continuous Voice: Silence detected. Processing...")
+                                    was_speaking = (self.state == "speaking")
                                     if self.state in ("idle", "listening"):
                                         self.set_state("thinking")
                                     
@@ -201,7 +213,12 @@ class VoiceWorker(QThread):
                                     audio_data = sr.AudioData(raw_data, SAMPLE_RATE, 2)
                                     text = stt_manager.transcribe(audio_data)
                                     if text:
-                                        self.handle_command(text, is_voice=True)
+                                        clean_text = self.wake_detector.strip_wake_word(text)
+                                        if was_speaking and (self.is_stop_command(clean_text) or "stop" in clean_text.lower()):
+                                            log.info("Barge-in stop command detected while speaking: '%s'. Stopping speech immediately.", text)
+                                            self.interrupt_processing()
+                                        else:
+                                            self.handle_command(clean_text, is_voice=True)
                                     
                                     # Reset state
                                     frames = []
@@ -227,7 +244,8 @@ class VoiceWorker(QThread):
                                 audio_data = sr.AudioData(raw_data, SAMPLE_RATE, 2)
                                 text = stt_manager.transcribe(audio_data)
                                 if text:
-                                    self.handle_command(text, is_voice=True)
+                                    clean_text = self.wake_detector.strip_wake_word(text)
+                                    self.handle_command(clean_text, is_voice=True)
                                 
                                 frames = []
                                 speech_detected = False
@@ -324,13 +342,37 @@ class VoiceWorker(QThread):
         if clean in ("stop", "cancel", "shut up", "quiet", "stop jarvis", "hold on", "never mind"):
             return ("Stopped.", True)
             
-        # 1a. Stop YouTube / Stop YT
-        if clean in ("stop youtube", "stop yt", "close youtube", "close yt", "stop youtube music", "stop yt music"):
+        # 1a. System Control Actions
+        if clean in ("screenshot", "take screenshot", "capture screen"):
+            res = tool_registry.execute('[TOOL: screenshot()]')
+            return (res, True)
+
+        if clean in ("lock pc", "lock computer", "lock screen"):
+            res = tool_registry.execute('[TOOL: lock_pc()]')
+            return (res, True)
+
+        if clean in ("sleep pc", "sleep computer", "put pc to sleep"):
+            res = tool_registry.execute('[TOOL: sleep_pc()]')
+            return (res, True)
+
+        if clean.startswith("open ") and not any(x in clean for x in ("youtube", "spotify", "note")):
+            app_name = clean[5:].strip()
+            if app_name:
+                res = tool_registry.execute(f'[TOOL: open_app("{app_name}")]')
+                return (res, True)
+
+        if clean.startswith("close ") and not any(x in clean for x in ("youtube", "spotify", "note")):
+            app_name = clean[6:].strip()
+            if app_name:
+                res = tool_registry.execute(f'[TOOL: close_app("{app_name}")]')
+                return (res, True)
+
+        if "stop youtube" in clean or "close youtube" in clean or "stop yt" in clean:
             res = tool_registry.execute('[TOOL: stop_youtube()]')
             return (res, True)
             
         # 1b. Conversational/Greeting commands
-        if clean in ("hello", "hi", "hey", "greetings", "hi jarvis", "hello jarvis", "hey jarvis"):
+        if clean in ("jarvis", "hello", "hi", "hey", "greetings", "hi jarvis", "hello jarvis", "hey jarvis", "ok jarvis", "okay jarvis"):
             return ("Hello. How can I help you today?", True)
             
         if clean in ("how are you", "how are you doing", "how's it going"):
@@ -686,9 +728,8 @@ class VoiceWorker(QThread):
                 result = tool_registry.execute(tool_tag)
                 self.response_received.emit("System", result)
                 
-                # Speak short success feedback if appropriate
-                if self.processing_thread is current_thread and not self.interrupted and "error" not in result.lower():
-                    tts_manager.speak("Done.")
+                # Display action result in chat
+                pass
         except Exception as e:
             log.error("Error in processing thread: %s", e)
         finally:
@@ -705,13 +746,17 @@ class JarvisApplication:
         self.main_window = MainWindow()
         self.floating_widget = FloatingAssistant()
 
-        # Position floating widget at bottom right of primary screen
-        screen_geo = self.app.primaryScreen().geometry()
-        self.floating_widget.move(
-            screen_geo.width() - 110,
-            screen_geo.height() - 150
-        )
+        # Position floating widget at bottom right of primary screen's available area
+        screen_geo = self.app.primaryScreen().availableGeometry()
+        widget_x = screen_geo.x() + screen_geo.width() - 140
+        widget_y = screen_geo.y() + screen_geo.height() - 180
+        self.floating_widget.move(widget_x, widget_y)
         self.floating_widget.show()
+        self.floating_widget.raise_()
+        self.floating_widget.activateWindow()
+
+        # Also open Main Dashboard Window on launch so it is immediately visible
+        self.show_main_window()
 
         # Connect signals
         self.main_window.text_submitted.connect(self.submit_typed_command)
@@ -728,14 +773,10 @@ class JarvisApplication:
         self.worker.create_task_requested.connect(self.main_window.add_todo)
         self.worker.start()
 
-        # Say startup greeting
+        # Log startup greeting to chat
         user_name = db_manager.get_memory("user_name")
         greeting = f"Jarvis online. Welcome back, {user_name}! How can I help you today?" if user_name else "Jarvis online. How can I help you today?"
         self.on_worker_response("Jarvis", greeting)
-        threading.Thread(
-            target=lambda: tts_manager.speak(greeting),
-            daemon=True
-        ).start()
 
     def setup_system_tray(self):
         self.tray_icon = QSystemTrayIcon(self.app)
@@ -786,6 +827,13 @@ class JarvisApplication:
             self.show_main_window()
 
     def show_main_window(self):
+        screen_geo = self.app.primaryScreen().availableGeometry()
+        window_geo = self.main_window.frameGeometry()
+        center_point = screen_geo.center()
+        window_geo.moveCenter(center_point)
+        self.main_window.move(window_geo.topLeft())
+        self.main_window.setWindowState(self.main_window.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
+        self.main_window.showNormal()
         self.main_window.show()
         self.main_window.raise_()
         self.main_window.activateWindow()
@@ -800,11 +848,12 @@ class JarvisApplication:
     @Slot(str)
     def on_worker_state_changed(self, state: str):
         self.floating_widget.set_state(state)
+        self.main_window.orb.set_state(state)
 
     @Slot(str, str)
     def on_worker_response(self, sender: str, message: str):
         self.main_window.append_message(sender, message)
-        self.main_window.refresh_user_label()
+        self.main_window.refresh_briefing_card()
         self.main_window.refresh_memories()
         self.main_window.refresh_notes()
         self.main_window.refresh_todos()
